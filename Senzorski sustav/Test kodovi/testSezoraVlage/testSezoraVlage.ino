@@ -37,15 +37,17 @@ void loop()
   float humidity = dht.readHumidity();
   float temperature = dht.readTemperature();
 
-  Serial.print("Sending packet: ");
-  Serial.println(counter);
+  Serial.print("H: ");
+  Serial.println(humidity);
+  Serial.print("T: ");
+  Serial.println(temperature);
 
   // Send packet with sensor data
   LoRa.beginPacket();
   LoRa.print("H: ");
-  LoRa.print(humidity);
+  LoRa.println(humidity);
   LoRa.print(" T: ");
-  LoRa.print(temperature);
+  LoRa.println(temperature);
   LoRa.endPacket();
 
   delay(1000);
