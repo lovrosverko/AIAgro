@@ -1,106 +1,79 @@
-/**
- **************************************************
- *
- * @file        LoRaReceiver.ino
- * @brief       This example shows how to use LoRa to receive packets
- *				from another LoRa module which is set as sender
- *              
- *
- *
- *
- * @authors    	Tom Igoe
- *
- * Modified by: Soldered for use with www.soldered.com/333157 , www.soldered.com/333158
- *
- ***************************************************/
+#define LORA // Definira korištenje LoRa modula za komunikaciju
 
-///                 Arduino      RFM95/96/97/98
-///                 GND----------GND   (ground in)
-///                 3V3----------3.3V  (3.3V in)
-///             pin D4-----------RESET  (RESET)
-/// interrupt 0 pin D2-----------DIO0  (interrupt request out)
-///          SS pin D10----------NSS   (CS chip select in)
-///         SCK pin D13----------SCK   (SPI clock in)
-///        MOSI pin D11----------MOSI  (SPI Data in)
-///        MISO pin D12----------MISO  (SPI Data out)
-/// This is pinout for Dasduino Core, if you are using other MCU, use SPI pins
-///and Interrupt pin 0, if Dasduino ConnectPlus is used
-/// (or any other ESP32 board) use pins(SS=27, RST=2, DIO0=32, MISO=33, MOSI=25,SCK=26)
+#include <SPI.h> // Uključuje biblioteku za SPI komunikaciju 
+#include "LoRa-SOLDERED.h" // Uključuje specifičnu LoRa biblioteku
+#include <Wire.h> // Uključuje biblioteku za rad sa I2C uređajima (za OLED)
+#include <Adafruit_GFX.h> // Uključuje biblioteku za rad s grafičkim sadržajem
+#include <Adafruit_SSD1306.h> // Uključuje biblioteku potrebnu za rad s OLED ekranom
 
+#define SCREEN_WIDTH 128 // Definira širinu OLED ekrana u pikselima
+#define SCREEN_HEIGHT 64 // Definira visinu OLED ekrana u pikselima
 
+// Kreira se objekt `display` klase `Adafruit_SSD1306` koji predstavlja OLED ekran
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1); 
 
-#define LORA  //Specify that module will be used for LoRa to LoRa communication
-#include <SPI.h>
-#include "LoRa-SOLDERED.h"
-#include <Wire.h>              // omogućuje komunikaciju Arduina sa I2C komponentama
-#include <Adafruit_GFX.h>      // omogućuje korištenje OLED ekrana
-#include <Adafruit_SSD1306.h>  // omogućuje korištenje OLED ekrana
-
-#define SCREEN_WIDTH 128  // sirina OLED ekrana u pikselima
-#define SCREEN_HEIGHT 64  // visina OLED ekrana u pikselima
-
-// Deklariranje SSD1306 ekrana spojenog na I2C sabirnicu (SDA i SCL izvodi)
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
-
-const int csPin = 10;    // LoRa radio chip select
-const int resetPin = 4;  // LoRa radio reset
-const int irqPin = 2;    // Change for your board; must be a hardware interrupt pin
+const int csPin = 10; // Definira pin za LoRa čip select
+const int resetPin = 4; // Definira pin za LoRa reset
+const int irqPin = 2; // Definira pin za LoRa interrupt (mora biti hardverski interrupt pin)
 
 void setup() {
-  Serial.begin(9600);  //Initialize serial communication with PC
-  while (!Serial)
-    ;
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {  // Adresa OLED ekrana (0x3C)
-    Serial.println(F("SSD1306 allocation failed"));
-    for (;;)
-      ;
+  Serial.begin(9600); // Inicijalizira serijsku komunikaciju (za ispis na računalo)
+  while (!Serial); // Čeka uspostavljanje serijske komunikacije
+
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Pokušava inicijalizirati OLED ekran
+    Serial.println(F("SSD1306 alokacija nije uspjela")); // Ispisuje poruku u slučaju neuspjeha
+    for (;;); // Beskonačna petlja (ako inicijalizacija ekrana ne uspije, program staje)
   }
-  delay(2000);
-  display.clearDisplay();
 
-  display.setTextSize(2);
-  display.setTextColor(WHITE);
-  display.setCursor(0, 10);
-  // Display static text
-  display.println("LoRa");
-  display.println("Reciever");
-  display.display();
+  delay(2000); // Čeka 2 sekunde
+  display.clearDisplay(); // Briše sadržaj ekrana
 
-  Serial.println("LoRa Receiver");
+  display.setTextSize(1); // Postavlja veličinu teksta
+  display.setTextColor(WHITE); // Postavlja boju teksta na bijelu
+  display.setCursor(0, 10); // Postavlja poziciju teksta (kursora) na ekranu
 
-  // Override the default CS, reset, and IRQ pins (optional)
-  LoRa.setPins(csPin, resetPin, irqPin);  // set CS, reset, IRQ pin
+  display.println("LoRa");  // Ispisuje riječ "LoRa" na ekran
+  display.println("Prijamnik"); // Ispisuje "Prijamnik" u novom redu na ekranu
+  display.display();  // Prikazuje promjene na OLED ekranu
 
-  if (!LoRa.begin(868E6))  // Initialize LoRa at 868 MHz
-  {
-    Serial.println("Starting LoRa failed!");
-    while (1)
-      ;
+  Serial.println("LoRa prijamnik"); // Ispisuje "LoRa prijamnik" na serijski izlaz 
+
+  LoRa.setPins(csPin, resetPin, irqPin); // Postavlja pinove za komunikaciju s LoRa modulom
+
+  if (!LoRa.begin(868E6)) { // Pokušava inicijalizirati LoRa modul
+    Serial.println("Pokretanje LoRe nije uspjelo!"); // Ispisuje poruku u slučaju neuspjeha
+    while (1); // Beskonačna petlja (ako inicijalizacija ne uspije, program staje)
   }
 }
 
 void loop() {
-  // Try to parse packet
-  int packetSize = LoRa.parsePacket();
-  if (packetSize) {
-    // Received a packet
-    Serial.print("Received packet '");
+  int packetSize = LoRa.parsePacket(); // Provjerava ima li dostupnih LoRa paketa
+  display.setCursor(0, 10); // Postavlja kursor na ekranu
+  display.clearDisplay(); // Briše sadržaj ekrana
 
-    display.setCursor(0, 10);
-    display.clearDisplay();
-    // Read packet
-    while (LoRa.available()) {
-      //Serial.print((char)LoRa.read());
-      display.print((char)LoRa.read());
-      display.display();
-    }
+  if (packetSize) { // Ako je primljen LoRa paket
+    Serial.println("Paket je primljen"); // Ispisuje poruku na serijsku komunikaciju
+    Serial.println("-------------------");
 
-    // Print RSSI of packet
-    Serial.print("' with RSSI ");
-    Serial.println(LoRa.packetRssi());
-    display.println("");
-    display.println("RSSI");
-    display.println(LoRa.packetRssi());
-    display.display();
+    // Čitaju se vrijednosti senzora iz LoRa paketa
+    String padaKisa = LoRa.readStringUntil('\n'); 
+    String soilMoisture = LoRa.readStringUntil('\n');
+    String humidity = LoRa.readStringUntil('\n');
+    String temperature = LoRa.readStringUntil('\n');
+    String uvValue = LoRa.readStringUntil('\n');
+
+    // Ispisuju se vrijednosti senzora na serijsku komunikaciju
+    Serial.print("padaKisa: "); 
+    Serial.println(padaKisa); 
+    Serial.print("soilMoisture: ");
+    Serial.println(soilMoisture);
+    Serial.print("humidity: ");
+    Serial.println(humidity);
+    Serial.print("temperature: ");
+    Serial.println(temperature);
+    Serial.print("uvValue: ");
+    Serial.println(uvValue);
+
+    Serial.println("-------------------");
   }
 }
