@@ -1,71 +1,71 @@
-#include <WiFi.h>          // Biblioteka za WiFi funkcionalnosti
-#include <PubSubClient.h>  // Biblioteka za rad s MQTT protokolom
+#include <WiFi.h>
+#include <PubSubClient.h>
 
-// Zamijeni sljedeće vrijednosti podacima vlastite WiFi mreže
+// WiFi
 const char* ssid = "Sedmica";
 const char* password = "!sedmica!";
 
-// Zamijeni sljedeće s IP adresom MQTT brokera kojeg koristiš
+// MQTT
 const char* mqttServer = "7.7.7.119";
-const int mqttPort = 1883;  // Standardni MQTT port
+const int mqttPort = 1883;
 
-WiFiClient espClient;       // Stvaranje WiFi klijenta
-PubSubClient client(espClient); // Stvaranje MQTT klijenta 
-
-long lastPublishTime = 0;       // Varijabla za praćenje vremena zadnjeg slanja poruke
-const long publishInterval = 2000;  // Interval objavljivanja poruka (2 sekunde)
+// MQTT klijent
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
 
 void setup() {
-  Serial.begin(115200);      // Inicijalizacija serijske komunikacije (za debugiranje)
-  delay(2000);   // Pauza od 2 sekunde prije nastavka
-  Serial.println("----------------START-----------------");
+  Serial.begin(9600);
+  while (!Serial);
 
-  WiFi.begin(ssid, password);   // Povezivanje na WiFi mrežu
+  // WiFi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi spojen!");
 
-  while (WiFi.status() != WL_CONNECTED) {  // Petlja čekanja dok se ne uspostavi WiFi veza
-    delay(500);
-    Serial.print(".");    // Vizualni pokazatelj čekanja
-  }
-
-  Serial.println("WiFi connected");  // Ispis potvrde kada je WiFi uspješno spojen
-  delay(2000);           // Kratka pauza
-  client.setServer(mqttServer, mqttPort); // Postavljanje adrese i porta MQTT brokera
+  // MQTT
+  mqttClient.setServer(mqttServer, mqttPort);
+  mqttClient.setCallback(callback);
 }
 
 void loop() {
-  if (!client.connected()) {      // Ako nismo spojeni na MQTT broker...
-    reconnect();                  // ...pokušaj ponovo uspostaviti vezu
-  }
-  client.loop();               // Osvježavanje stanja MQTT komunikacije
+  // Čitaju se vrijednosti senzora
+  String padaKisa = Serial.readStringUntil('\n');
+  String soilMoisture = Serial.readStringUntil('\n');
+  String humidity = Serial.readStringUntil('\n');
+  String temperature = Serial.readStringUntil('\n');
+  String uvValue = Serial.readStringUntil('\n');
 
-  long now = millis();            // Dohvaćanje trenutnog vremenskog trenutka
+  // Ako je MQTT klijent spojen, šalju se podaci
+  if (mqttClient.connected()) {
+    mqttClient.publish("aiagro/padaKisa", padaKisa.c_str());
+    mqttClient.publish("aiagro/soilMoisture", soilMoisture.c_str());
+    mqttClient.publish("aiagro/humidity", humidity.c_str());
+    mqttClient.publish("aiagro/temperature", temperature.c_str());
+    mqttClient.publish("aiagro/uvValue", uvValue.c_str());
+  }
 
-  if (now - lastPublishTime > publishInterval) { // Ako je prošlo dovoljno vremena...
-    lastPublishTime = now;      // ...ažuriraj vrijeme zadnjeg objavljivanja
-
-    // Objavljivanje tekstualne poruke:
-    String stringMessage = "Test String Message";  
-    client.publish("aiagro/testString", stringMessage.c_str()); 
-    Serial.println("String message published");
-
-    // Objavljivanje numeričke poruke (primjer):
-    int numberMessage = 42;
-    String numberMessageString = String(numberMessage);   
-    client.publish("aiagro/testNumbers", numberMessageString.c_str());
-    Serial.println("Number message published");
-  }
+  // Povezivanje s MQTT brokerom ako nije već spojen
+  if (!mqttClient.connected()) {
+    while (!mqttClient.connect("ESP32", "", "")) {
+      Serial.print("Povezivanje s MQTT brokerom nije uspjelo!");
+      delay(5000);
+    }
+    Serial.println("Povezan s MQTT brokerom!");
+  }
+  mqttClient.loop();
 }
 
-void reconnect() { // Funkcija za ponovno spajanje na MQTT 
-  while (!client.connected()) {
-    Serial.println("Attempting MQTT connection...");
-    if (client.connect("AIAgro_bot")) {             // Pokušaj spajanja
-      Serial.println("Connected to MQTT broker");
-    } else {
-      Serial.print("Failed, rc=");
-      Serial.print(client.state());               // Ako spajanje nije uspjelo, ispiši kod greške
-      Serial.println(" Retrying in 5 seconds");
-      delay(5000);                                // Pauza od 5 sekundi prije ponovnog pokušaja
-    }
-  }
+void callback(char* topic, byte* payload, unsigned int length) {
+  // Obrada poruka koje dolaze na MQTT topic
+  Serial.print("Primljena poruka na topicu: ");
+  Serial.println(topic);
+  Serial.print("Poruka: ");
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
 }
